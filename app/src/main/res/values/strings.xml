@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Yandex map</string>
+    
+    <string-array name="cities">
+        <item>Москва</item>
+        <item>Мариуполь</item>
+        <item>Магадан</item>
+        <item>Астрахань</item>
+        <item>Волгорад</item>
+        <item>Самара</item>
+        <item>Санкт-Петербург</item>
+    </string-array>
+    
+    
+</resources>
