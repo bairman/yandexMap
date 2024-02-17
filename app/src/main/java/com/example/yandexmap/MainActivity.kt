@@ -3,7 +3,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PointF
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -12,10 +11,13 @@ import android.view.inputmethod.EditorInfo
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.example.Interface.SuggestApi
+import com.example.adapter.LocationAdapter
+import com.example.data.LocationData
 import com.example.yandexmap.databinding.ActivityMainBinding
 import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.layers.ObjectEvent
@@ -38,7 +40,6 @@ import com.yandex.mapkit.user_location.UserLocationLayer
 import com.yandex.mapkit.user_location.UserLocationObjectListener
 import com.yandex.mapkit.user_location.UserLocationView
 import com.yandex.runtime.Error
-import com.yandex.runtime.Runtime.init
 import com.yandex.runtime.image.ImageProvider
 import com.yandex.runtime.network.NetworkError
 import com.yandex.runtime.network.RemoteError
@@ -101,52 +102,52 @@ class MainActivity : AppCompatActivity(), UserLocationObjectListener, Session.Se
             .build()
         val service = retrofit.create(SuggestApi::class.java)
 
-
-        val adapter = ArrayAdapter<String>(this, android.R.layout.simple_dropdown_item_1line)
+        //val adapter = ArrayAdapter<String>(this, android.R.layout.simple_dropdown_item_1line)
+        val adapter = LocationAdapter(this, emptyList() )
         searchEdit.setAdapter(adapter)
         searchEdit.setOnItemClickListener { parent, view, position, id ->
             val selectedItem = parent.getItemAtPosition(position) as String
             searchEdit.setText(selectedItem)
-            Log.d("Autocomplete", "Selected item: $selectedItem")
+            Log.d("Autocomplete", "Selected item: ${selectedItem}")
         }
 
 
-            lifecycleScope.launch {
-               searchQueryFlow
-                    .debounce(300) // Задержка в 300 мс
-                    .filter { query ->
-                        query.isNotEmpty() && query.length >= 2 // Игнорируем пустой запрос
-                    }
-                    .distinctUntilChanged() // Игнорируем повторяющиеся запросы
-                    .onEach {
-                        Log.d("DebounceCheck", "Выполняется запрос: $it")
-                    }
-                    .flatMapLatest { query ->
-                        // Обертываем результат запроса в flow, чтобы можно было использовать с flatMapLatest
-                        flow {
-                            try {
-                                Log.e("AutoCompleteError", "Данные отправил")
-                                val response = service.getCity(query)
-                                if (response.suggestion.isNotEmpty()) {
-                                    emit(response.suggestion.map { it.address.formattedAddress }) // Отправляем список адресов
-                                } else {
-                                    emit(emptyList<String>()) // Отправляем пустой список, если нет данных
-                                }
-                            } catch (e: Exception) {
-                                Log.e("AutoCompleteError", "Ошибка при получении данных", e)
-                                emit(emptyList<String>()) // В случае ошибки также отправляем пустой список
+        lifecycleScope.launch {
+            searchQueryFlow
+                .debounce(300) // Задержка в 300 мс
+                .filter { query ->
+                    query.isNotEmpty() && query.length >= 2 // Игнорируем пустой запрос
+                }
+                .distinctUntilChanged() // Игнорируем повторяющиеся запросы
+                .onEach {
+                    Log.d("DebounceCheck", "Выполняется запрос: $it")
+                }
+                .flatMapLatest { query ->
+                    // Обертываем результат запроса в flow, чтобы можно было использовать с flatMapLatest
+                    flow {
+                        try {
+                            Log.e("AutoCompleteError", "Данные отправил")
+                            val response = service.getCity(query)
+                            if (response.suggestion.isNotEmpty()) {
+                                emit(response.suggestion.map { "${it.title}, ${it.address.formattedAddress}"  }) // Отправляем список адресов
+                            } else {
+                                emit(emptyList<String>()) // Отправляем пустой список, если нет данных
                             }
+                        } catch (e: Exception) {
+                            Log.e("AutoCompleteError", "Ошибка при получении данных", e)
+                            emit(emptyList<String>()) // В случае ошибки также отправляем пустой список
                         }
                     }
-                    .collect { suggestions ->
-                        // Обновляем UI в главном потоке
-                        withContext(Dispatchers.Main) {
-                            adapter.clear()
-                            adapter.addAll(suggestions)
-                            adapter.notifyDataSetChanged()
-                        }
+                }
+                .collect { suggestions ->
+                    // Обновляем UI в главном потоке
+                    withContext(Dispatchers.Main) {
+                        adapter.clear()
+                        adapter.addAll(suggestions)
+                        adapter.notifyDataSetChanged()
                     }
-            }
+                }
+        }
 
 
         searchEdit.addTextChangedListener(object : TextWatcher {
@@ -165,26 +166,6 @@ class MainActivity : AppCompatActivity(), UserLocationObjectListener, Session.Se
 
             // beforeTextChanged и onTextChanged определены, но не используются
         })
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //        searchEdit.addTextChangedListener(object : TextWatcher {
 //
@@ -283,23 +264,23 @@ class MainActivity : AppCompatActivity(), UserLocationObjectListener, Session.Se
     override fun onObjectUpdated(p0: UserLocationView, p1: ObjectEvent) {
     }
 
-override fun onSearchResponse(response: Response) {//Очистка существующих меток.Добавление новых меток по результатам поиска
-    val mapObject: MapObjectCollection = mapView.map.mapObjects //Отображение карты. Перемещение камеры на результат
-    mapObject.clear()
-    for (searchResult in response.collection.children) {
-        val resultLocation = searchResult.obj!!.geometry[0].point!! //geometry?.getOrNull(0)?.point уберет лишние круги
-        mapObject.addPlacemark(
-            resultLocation,
-            ImageProvider.fromResource(this, R.drawable.search_result)
+    override fun onSearchResponse(response: Response) {//Очистка существующих меток.Добавление новых меток по результатам поиска
+        val mapObject: MapObjectCollection = mapView.map.mapObjects //Отображение карты. Перемещение камеры на результат
+        mapObject.clear()
+        for (searchResult in response.collection.children) {
+            val resultLocation = searchResult.obj!!.geometry[0].point!! //geometry?.getOrNull(0)?.point уберет лишние круги
+            mapObject.addPlacemark(
+                resultLocation,
+                ImageProvider.fromResource(this, R.drawable.search_result)
+            )
+        }
+        mapView.isVisible = true
+        // Перемещение камеры на найденную точку
+        val resultLocation = response.collection.children[0].obj!!.geometry[0].point!!
+        mapView.map.move(
+            CameraPosition(resultLocation, 10.0f, 0.0f, 0.0f)
         )
     }
-    mapView.isVisible = true
-    // Перемещение камеры на найденную точку
-    val resultLocation = response.collection.children[0].obj!!.geometry[0].point!!
-    mapView.map.move(
-        CameraPosition(resultLocation, 10.0f, 0.0f, 0.0f)
-    )
-}
     private fun submitQuery(query: String) { //Выполнение запроса поиска
         searchSession = searchManager.submit(
             query, VisibleRegionUtils.toPolygon(mapView.map.visibleRegion), SearchOptions(), this
